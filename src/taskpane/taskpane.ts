@@ -1,8 +1,3 @@
-/*
- * Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
- * See LICENSE in the project root for license information.
- */
-
 /* global console, document, Excel, Office */
 
 Office.onReady((info) => {
@@ -13,22 +8,53 @@ Office.onReady((info) => {
   }
 });
 
+/**
+ *
+ * @param context
+ * @param depth Depth of heading to search to.
+ *              For example, a depth of three means it will only search for subheadings
+ *              at most three levels deep.
+ * @returns An array of cells grouped by their depth.
+ *          For example, ```output[1][4]``` points to the fifth second-hierarchical heading.
+ */
+async function getHeadingCells(context: Excel.RequestContext, depth = 3): Promise<Excel.Range[][]> {
+  const workbook = context.workbook;
+  const depthToHeadings: Excel.Range[][] = Array(depth).fill([]);
+
+  workbook.worksheets.load("items");
+  await context.sync();
+
+  for (let i = 0; i < depth; i++) {
+    const searchStr = "#".repeat(i + 1) + " ";
+
+    for (let sheet of workbook.worksheets.items) {
+      let rangeCollection: Excel.RangeCollection;
+      rangeCollection = sheet.findAll(searchStr, { completeMatch: false }).areas;
+      rangeCollection.load("items");
+      try {
+        // eslint-disable-next-line office-addins/no-context-sync-in-loop
+        await context.sync();
+      } catch (e) {
+        if (e.code === "ItemNotFound") continue;
+        console.error(e);
+      }
+
+      depthToHeadings[i] = rangeCollection.items.filter((item) => item.text[0][0].startsWith(searchStr));
+    }
+  }
+  return depthToHeadings;
+}
+
 export async function run() {
   try {
     await Excel.run(async (context) => {
-      /**
-       * Insert your Excel code here
-       */
-      const range = context.workbook.getSelectedRange();
-
-      // Read the range address
-      range.load("address");
-
-      // Update the fill color
-      range.format.fill.color = "yellow";
-
+      const depthToHeadingCells = await getHeadingCells(context);
+      for (let headingCells of depthToHeadingCells) {
+        for (let headingCell of headingCells) {
+          console.log(headingCell.text[0][0]);
+        }
+      }
       await context.sync();
-      console.log(`The range address was ${range.address}.`);
     });
   } catch (error) {
     console.error(error);
