@@ -85,6 +85,37 @@ function sortMarks(marks: Mark[]): Mark[] {
   return sortedMarks;
 }
 
+async function createTableOfContests(
+  marks: Mark[],
+  range: Excel.Range,
+  context: Excel.RequestContext,
+  indentStr = "  "
+) {
+  range.load("rowCount");
+  await context.sync();
+
+  const cc = range.getCell(2, 1);
+  cc.load(["text", "hyperlink"]);
+  await context.sync();
+  console.log(cc.hyperlink);
+  console.log(cc.text);
+
+  const rowCount = range.rowCount;
+  let i = 0;
+
+  for (let mark of marks) {
+    if (i >= rowCount) {
+      console.error(new Error("Make a bigger selection"));
+      break;
+    }
+
+    const text = indentStr.repeat(mark.order) + mark.name;
+
+    range.getCell(i, 0).set({ values: [[text]], hyperlink: { documentReference: mark.address, textToDisplay: text } });
+    i++;
+  }
+}
+
 export async function run() {
   try {
     await Excel.run(async (context) => {
@@ -107,8 +138,8 @@ export async function run() {
         mark.findParent(marks);
       }
 
-      console.log(sortMarks(marks));
-
+      const sortedMarks = sortMarks(marks);
+      await createTableOfContests(sortedMarks, workbook.getSelectedRange(), context);
       await context.sync();
     });
   } catch (error) {
