@@ -26,11 +26,15 @@ export class Mark {
    */
   coordinates: [number, number];
   /**
+   * Distance from origin. To be used to sort marks.
+   */
+  distanceFromOrigin: number;
+  /**
    * Worksheet name containing the heading cell
    */
   worksheetName: string;
   headingCell: Excel.Range;
-  constructor(headingCell: Excel.Range, worksheetName?: string) {
+  constructor(headingCell: Excel.Range, worksheetNames: string[]) {
     this.address = headingCell.address;
     this.name = headingCell.text[0][0].replace(/^#+ /, "");
 
@@ -38,10 +42,13 @@ export class Mark {
     this.order = headingCell.text[0][0].split(" ")[0].length - 1;
     this.coordinates = [headingCell.columnIndex, headingCell.rowIndex];
 
-    if (worksheetName) {
-      this.worksheetName = worksheetName;
+    this.worksheetName = this.address.split("!")[0];
+    const worksheetIndex = worksheetNames.findIndex((s) => s === this.worksheetName);
+
+    if (worksheetIndex === -1) {
+      this.distanceFromOrigin = 999000 + 1000 * this.coordinates[0] + this.coordinates[1];
     } else {
-      this.worksheetName = headingCell.worksheet.name;
+      this.distanceFromOrigin = worksheetIndex * 10000 + 1000 * this.coordinates[0] + this.coordinates[1];
     }
 
     this.headingCell = headingCell;
@@ -73,6 +80,17 @@ export class Mark {
     this.parentalDistance = distanceToClosestParent;
     return closestParent;
   }
+  /**
+   * Get children from pool.
+   * @param pool Array of potential children
+   * @returns Children
+   */
+  public getChildren(pool: Mark[]): Mark[] {
+    const childrenOrder = this.order + 1;
+    const children = pool.filter((mark) => mark.order === childrenOrder && mark.parentMark === this);
+    children.sort((a, b) => a.distanceFromOrigin - b.distanceFromOrigin);
+    return children;
+  }
 
   /**
    * Calculates the parental distance
@@ -96,7 +114,7 @@ export class Mark {
     }
 
     if (deltaColumns > 0) {
-      return this.coordinates[1] * deltaColumns + mark.coordinates[1] + offset;
+      return this.coordinates[1] * deltaColumns + deltaRows + offset;
     }
     return deltaRows + offset;
   }

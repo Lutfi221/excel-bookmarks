@@ -47,23 +47,67 @@ async function getHeadingCells(context: Excel.RequestContext, depth = 3): Promis
   return depthToHeadings;
 }
 
+/**
+ * Sorts marks so it can be displayed as a table
+ * of contents.
+ * @param marks Marks
+ * @returns Sorted marks
+ */
+function sortMarks(marks: Mark[]): Mark[] {
+  const sortedMarks: Mark[] = [];
+  const depthToMarks: (Mark[] | undefined)[] = [];
+
+  for (let mark of marks) {
+    if (typeof depthToMarks[mark.order] === "undefined") {
+      depthToMarks[mark.order] = [];
+    }
+    depthToMarks[mark.order].push(mark);
+  }
+
+  /**
+   * Collapse children
+   * @param mark Mark
+   * @returns Collapsed mark and it's children
+   */
+  const collapseChildren = (mark: Mark): Mark[] => {
+    const children = mark.getChildren(depthToMarks[mark.order + 1] || []);
+    const output = [mark];
+    for (let child of children) {
+      output.push(...collapseChildren(child));
+    }
+    return output;
+  };
+
+  for (let mark of depthToMarks[0]) {
+    sortedMarks.push(...collapseChildren(mark));
+  }
+
+  return sortedMarks;
+}
+
 export async function run() {
   try {
     await Excel.run(async (context) => {
+      const workbook = context.workbook;
+      workbook.worksheets.load("items");
+      await context.sync();
+
+      const worksheetNames = workbook.worksheets.items.map((worksheet) => worksheet.name);
+
       const depthToHeadingCells = await getHeadingCells(context);
       const marks: Mark[] = [];
 
       for (let headingCells of depthToHeadingCells) {
         for (let headingCell of headingCells) {
-          // Worksheet name is obtained like this so we don't
-          // have to call context.sync() in a loop
-          marks.push(new Mark(headingCell, headingCell.address.split("!")[0]));
+          marks.push(new Mark(headingCell, worksheetNames));
         }
       }
 
       for (let mark of marks) {
         mark.findParent(marks);
       }
+
+      console.log(sortMarks(marks));
 
       await context.sync();
     });
