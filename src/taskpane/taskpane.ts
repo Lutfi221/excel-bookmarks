@@ -1,5 +1,7 @@
 /* global console, document, Excel, Office */
 
+import { Mark } from "../types";
+
 Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
@@ -49,11 +51,20 @@ export async function run() {
   try {
     await Excel.run(async (context) => {
       const depthToHeadingCells = await getHeadingCells(context);
+      const marks: Mark[] = [];
+
       for (let headingCells of depthToHeadingCells) {
         for (let headingCell of headingCells) {
-          console.log(headingCell.text[0][0]);
+          // Worksheet name is obtained like this so we don't
+          // have to call context.sync() in a loop
+          marks.push(new Mark(headingCell, headingCell.address.split("!")[0]));
         }
       }
+
+      for (let mark of marks) {
+        mark.findParent(marks);
+      }
+
       await context.sync();
     });
   } catch (error) {
